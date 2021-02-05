@@ -56,12 +56,7 @@ def generate_data(
     Maker.MODEL = class_type
     Maker.NOISE_PERC_RANGE = noise_range
     Maker.DEST = format
-    if is_train:
-        Maker.TRAIN_DIR = "train"
-        Maker.TEST_DIR = ""
-    else:
-        Maker.TRAIN_DIR = ""
-        Maker.TEST_DIR = "test"
+
 
     Maker.NUMBER_OF_MODELS = nm
 

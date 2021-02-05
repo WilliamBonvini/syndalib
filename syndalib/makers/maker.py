@@ -4,8 +4,9 @@ import os
 from abc import ABC
 from random import uniform
 from typing import Tuple, List
-
+import syndalib.drawer as sydraw
 import numpy as np
+import pandas as pd
 import scipy.io
 from syndalib.utils.config import opts
 from syndalib.utils.utils import (
@@ -36,6 +37,10 @@ class Maker(ABC):
     IMG_BASE_DIR = None
     IMG_DIR = None
     MODEL = None
+    PLOT = None
+    SAVE_IMGS = None
+    SAVE_NUMPY = None
+    SAVE_MATLAB = None
     DT = np.dtype([("x1p", "O"), ("x2p", "O"), ("labels", "O")])
 
     @abc.abstractmethod
@@ -60,44 +65,57 @@ class Maker(ABC):
         """
         pass
 
-    def generate_random_sample(self, plot: bool = True) -> Tuple:
+    def generate_random_sample(self, plot: bool = True):
         """
         generates a random sample of the desired class.
 
         :param: bool, true to plot sample, false otherwise. default is True.
-        :return: tuple, (x1,x2,labels) ---
+        :return: np.ndarray (num inliers + num outliers, num coords + num models), shuffled sample
+
+        in the previous version it returned:
+            tuple, (x1,x2,labels) ---
         where:
         x1 is an np.ndarray (npps,);
         x2 is an np.ndarray (npps,);
         labels is an np.ndarray (npps, nm);
         """
+        n_coords = 2
         tot_inliers = np.random.choice(Maker.INLIERS_RANGE)
-        inliers_per_model = compute_num_inliers_per_model(
-            tot_inliers, Maker.NUMBER_OF_MODELS
-        )
-        inliers = []
-        for n_inliers in inliers_per_model:
-            # model_inliers is a list of tuples (x,y)
-            model_inliers = self.generate_random_model(n_inliers=n_inliers)
-            inliers.append(model_inliers)
-
+        inliers_per_model = compute_num_inliers_per_model(tot_inliers, Maker.NUMBER_OF_MODELS)
         n_outliers = Maker.NUM_POINTS_PER_SAMPLE - tot_inliers
-        outliers = self.generate_outliers(n_outliers)
+        sample = np.ones((tot_inliers + n_outliers, 2 + Maker.NUMBER_OF_MODELS))
+        # GOTTA be (tot_inliers, n_coords)
+        cursor = 0
+        for i_model, n_inliers in zip(range(n_coords, n_coords + Maker.NUMBER_OF_MODELS), inliers_per_model):
+            # model GOTTA be np.ndarray (n_inliers, n_coords)
+            model_inliers = self.generate_random_model(n_inliers=n_inliers)
+            sample[cursor:cursor + n_inliers, 0:n_coords] = model_inliers  # save coordinates
+            sample[cursor:cursor + n_inliers, i_model] = np.zeros((n_inliers,))  # set inliers labels (inlier = 0)
+            cursor = cursor + n_inliers
 
+        # GOTTA be (n_outliers, n_coords)
+        x_range = opts["outliers"]["x_r"]
+        y_range = opts["outliers"]["y_r"]
+        sample[cursor:, 0:n_coords] = sydraw.outliers_points(x_range=x_range, y_range=y_range, n=n_outliers, homogeneous=False)
+
+        # todo: the plot_sample is also the one responsible to save the image. it should'nt be like this
         if plot:
-            plot_sample(inliers, outliers, Maker.IMG_DIR)
+            plot_sample(inliers=sample[0:cursor, 0:2],
+                        outliers=sample[cursor:, 0:2],
+                        inliers_per_model=inliers_per_model,
+                        imgdir=Maker.IMG_DIR,
+                        save_imgs=Maker.SAVE_IMGS)
 
-        sample = convert_to_np_struct(inliers=inliers, outliers=outliers)
         np.random.shuffle(sample)
-        sample_mat = convert_to_mat_struct(sample)
 
-        return sample_mat
+        return sample
 
-    def generate_dataset_fixed_nr_and_or(self) -> None:
+    def generate_dataset_fixed_nr_and_or(self) -> np.ndarray:
         """
+
         saves a .mat file in a structured fashioned folder with a fixed gaussian noise and a fixed outliers rate
 
-        :return:
+        :return:  np.array, (ns, npps, n_coords + nm)
         """
 
         avg_num_inliers = math.floor(
@@ -106,46 +124,38 @@ class Maker(ABC):
         Maker.INLIERS_RANGE = list(range(avg_num_inliers - 2, avg_num_inliers + 2))
 
         # handle possibility that training or testing directory are empty
-        for curDir in [Maker.TRAIN_DIR, Maker.TEST_DIR]:
-            if curDir == "":
-                continue
-            Maker.CUR_DIR = curDir
-            Maker.IMG_DIR = (
-                Maker.IMG_BASE_DIR
-                + "/"
-                + Maker.MODEL
-                + "_no_"
-                + str(int(Maker.OUTLIERS_PERC * 100))
-                + "_noise_"
-                + str(Maker.NOISE_PERC)
-            )
-            if not os.path.exists(Maker.IMG_DIR):
-                os.mkdir(Maker.IMG_DIR)
+        if Maker.SAVE_IMGS:
+            Maker.IMG_DIR = "{}/{}_no_{}_noise_{}" \
+                            "".format(Maker.IMG_BASE_DIR, Maker.MODEL, int(Maker.OUTLIERS_PERC*100), Maker.NOISE_PERC)
+            os.makedirs(Maker.IMG_DIR, exist_ok=True)
 
-            samples = []
-            for _ in range(Maker.NUM_SAMPLES):
-                sample = self.generate_random_sample()
-                samples.append(sample)
+        samples = np.zeros((Maker.NUM_SAMPLES, Maker.NUM_POINTS_PER_SAMPLE, 2 + Maker.NUMBER_OF_MODELS))
 
-            samples = np.array(samples, dtype=Maker.DT)
-            dataset = np.array([samples])
+        for i in range(Maker.NUM_SAMPLES):
+            samples[i, ...] = self.generate_random_sample(plot=Maker.PLOT)
+
+        data = samples[:, 0:2]
+        labels = samples[:, 2:]
+
+        if Maker.SAVE_NUMPY:
+            # data_and_labels = {"data": data, "labels": labels, "outliers": Maker.OUTLIERS_PERC, "noise": Maker.NOISE_PERC}
+            file_name = "{}/{}_no_{}_noise_{}".format(Maker.BASE_DIR, Maker.MODEL, int(Maker.OUTLIERS_PERC * 100), Maker.NOISE_PERC)
+            np.save(file=file_name, arr=samples)
+
+        if Maker.SAVE_MATLAB:
+            dataset = np.array(samples, dtype=Maker.DT)
+            dataset = np.array([dataset])
+            print("shape dataset finale: {}".format(dataset.shape))
+            print("shape dataset[0][5]: {}".format(dataset[0][5].shape))
+            print("\n\n\n\ndataset [0][5]:\n{}".format(dataset[0][5]))
+            print("shape dataset[0][5][0]: {}".format(dataset[0][5][0].shape))
+            print("dataset[0][5][0]:\n{}".format(dataset[0][5][0]))
+            # analizzo shape iniziale e shape finale. poi ristrutturo il codice di conseguenza
             # save it into a matlab file
-            folder = (
-                "./"
-                + Maker.BASE_DIR
-                + "/"
-                + curDir
-                + "/"
-                + Maker.MODEL
-                + "_no_"
-                + str(int(Maker.OUTLIERS_PERC * 100))
-                + "_noise_"
-                + str(Maker.NOISE_PERC)
-                + ".mat"
-            )
-            scipy.io.savemat(
-                folder, mdict={"dataset": dataset, "outlierRate": Maker.OUTLIERS_PERC}
-            )
+            folder = "./{}/{}_no_{}_noise_{}.mat".format(Maker.BASE_DIR, Maker.MODEL, int(Maker.OUTLIERS_PERC * 100), Maker.NOISE_PERC)
+            scipy.io.savemat(folder, mdict={"dataset": dataset, "outlierRate": Maker.OUTLIERS_PERC})
+
+        return samples
 
     def generate_outliers(self, n_outliers: int) -> List:
         """
@@ -167,4 +177,5 @@ class Maker(ABC):
             for out_rate in Maker.OUTLIERS_PERC_RANGE:
                 Maker.NOISE_PERC = noise_stddev
                 Maker.OUTLIERS_PERC = out_rate
-                self.generate_dataset_fixed_nr_and_or()
+                dataset = self.generate_dataset_fixed_nr_and_or()
+                return dataset

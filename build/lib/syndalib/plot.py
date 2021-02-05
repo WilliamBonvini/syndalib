@@ -1,9 +1,8 @@
 from typing import Type, List, Tuple, Union
 import matplotlib.pyplot as plt
 import numpy as np
-import tensorflow as tf
 
-
+#todo: get rid of it and of all this module
 def plot_2d(points: Type[np.array]):
     """
     plots in 2D some points
@@ -14,22 +13,27 @@ def plot_2d(points: Type[np.array]):
     ys = [point[1] for point in points]
     plt.scatter(xs, ys, s=10)
 
-
-@tf.function
-def plot_conic_curve(coefs: List,
+"""
+def plot_conic_curve(coefs: Union[List, np.ndarray],
                      x_range: Tuple[float, float] = (-10.0, 10.0),
                      y_range: Tuple[float, float] = (-10.0, 10.0),
                      resolution: Union[int, Tuple[int, int]] = 1000):
-    """
+    
     plots a conic given its 6 coefficients
-    :param coefs: list of 6 conic parameters [x^2, xy, y^2, x, y, 1]
+    :param coefs: list or np.ndarray. 6 conic parameters [x^2, xy, y^2, x, y, 1]
     :param x_range: interval of values of x for which the curve is to be plotted. default is (-10.0, 10.0)
     :param y_range: interval of values of y for which the curve is to be plotted. default is (-10.0, 10.0)
     :param resolution: how many points to be sampled in each of the 2 dimensions, default is 1000*1000
     :return:
-    """
+    
+    print("entrato in plot_conic_curve!!")
+    print("aspetta un secondo, non mi dire che: coefs è un tensor D: ... type(coefs) = {}".format(type(coefs)))
 
+
+    #print("a sto punto famo .numpy()!!")
     a, b, c, d, e, f = coefs
+    print("unpacked coefs!! a = {}".format(a))
+
     if a == 0 and b == 0 and c == 0:
         raise Exception("Inputted linear equation")
 
@@ -59,10 +63,11 @@ def plot_conic_curve(coefs: List,
 
     plt.gca().set_aspect('equal', adjustable='datalim')
     plt.scatter(x, y, s=5)
-    #plt.show()
+    plt.show()
     return
+    
 
-    """
+
     points = []
     sym_points = []
     X = np.linspace(*x_range, num=800)

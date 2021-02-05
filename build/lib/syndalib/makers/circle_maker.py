@@ -1,10 +1,12 @@
 import math
-import os
 from random import uniform
+from typing import List
+
 import numpy as np
 import random as rand
 from syndalib.makers.maker import Maker
 from syndalib.utils.config import opts
+import syndalib.drawer as sydraw
 
 
 class CircleMaker(Maker):
@@ -16,12 +18,12 @@ class CircleMaker(Maker):
         Maker.MODEL = "circles"
         super(CircleMaker, self).__init__()
 
-    def generate_random_model(self, n_inliers: int = None):
+    def generate_random_model(self, n_inliers: int = None) -> List:
         """
         generates points belonging to a randomly sampled model
 
         :param n_inliers: number of inlier points for this specific model
-        :return:
+        :return: np.ndarray, (n_inliers, n_coords)
         """
         x_c_min, x_c_max = opts["circles"]["x_center_r"]
         y_c_min, y_c_max = opts["circles"]["y_center_r"]
@@ -30,10 +32,9 @@ class CircleMaker(Maker):
         x_center = uniform(x_c_min, x_c_max)
         y_center = uniform(y_c_min, y_c_max)
         radius = uniform(r_min, r_max)
-        xy = [
-            CircleMaker.point(y_center, x_center, radius, CircleMaker.NOISE_PERC)
-            for _ in range(n_inliers)
-        ]
+
+        xy = sydraw.circle_points(radius=radius, center=(x_center, y_center), n=n_inliers, noise=CircleMaker.NOISE_PERC, homogeneous=False)
+
         return xy
 
     @staticmethod

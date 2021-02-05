@@ -53,18 +53,17 @@ def checkExistenceAndCreate(path: string):
         os.mkdir(path)
 
 
-
 def convert_to_np_struct(inliers: List, outliers: List) -> np.ndarray:
     """
     merges list of inliers and list of outliers into an np.ndarray and returns it
 
-    :param inliers: list, a list of lists of inliers. one list for each model. each list is made of tuples (coord1,coord2,...)
-    :param outliers: list, a list of tuples (coord1,coord2,...)
-    :return: np.ndarray, shuffled sample
+    :param inliers: list, [ [(x11,y11), ..., (x1n, y1n)], ..., [(xm1,ym1), ..., (xmn,ymn)] ] one list for each model
+    :param outliers: list, [(x1,y1), ..., (xn,yn)].
+    :return: np.ndarray (num inliers + num outliers, num coords + num models),  NOT shuffled sample
     """
 
     # convert inliers to np array
-    inliers = np.array([np.array(model_inliers) for model_inliers in inliers])
+    inliers = np.array([np.array(model_inliers) for model_inliers in inliers])  # np.ndarray (num models, num points)
 
     # obtain number of models
     num_models = inliers.shape[0]
@@ -110,6 +109,7 @@ def convert_to_mat_struct(sample: np.ndarray) -> Tuple:
     :param sample: np.ndarray, sample coded as 2d points + their label
     :return: a triplet made of correspondences + labels, the kind of struct matlab deals with
     """
+    print("convert_to_mat_struct_input = {}".format(sample.shape))
     sample = sample.T
     x1p = np.array([elem for elem in sample[0, :]], dtype=np.float32)
     x2p = np.array([elem for elem in sample[1, :]], dtype=np.float32)
@@ -118,13 +118,12 @@ def convert_to_mat_struct(sample: np.ndarray) -> Tuple:
     num_points_per_sample = sample.shape[1]
     labels = np.zeros(shape=(num_points_per_sample, num_models))
     for i_model in range(num_models):
-        labels[:, i_model] = np.array(
-            [elem for elem in sample[2 + i_model, :]], dtype=np
-        )
+        labels[:, i_model] = np.array([elem for elem in sample[2 + i_model, :]], dtype=np)
     # se dovessi avere problemi con il single model fitting forse mi basta deglutire la seconda dimensione di labels
     # oltre al commento sopra dovrei evitare di fare la seguente transpose immagino
     labels = labels.T
     circle_mat = (x1p, x2p, labels)
+    print("convert_to_mat_struct output shapes = \n[0] is {}\n[1] is {}\n[2] is {}".format(circle_mat[0].shape, circle_mat[1].shape, circle_mat[2].shape))
     return circle_mat
 
 
@@ -146,19 +145,40 @@ def compute_num_inliers_per_model(tot_num_inliers, num_of_models):
     return n_inliers
 
 
-def plot_sample(inliers, outliers, imgdir):
-    for model in inliers:
-        plt.scatter(*zip(*model), s=2)
-    plt.scatter(*zip(*outliers), s=2)
+def plot_sample(inliers:np.ndarray,
+                outliers: np.ndarray,
+                inliers_per_model: List,
+                imgdir: str,
+                save_imgs: bool):
+    """
+    saves and plots samples
+    :param inliers: np.ndarray, (tot_num inliers, n_coords)
+    :param outliers: np.ndarray, (num_outliers, n_coords)
+    :param inliers_per_model: list of ints, inliers is an ordered array. the first inliers_per_model[0] points belong
+                              to the first model, the second inliers_per_moel[1] points belong to the second model,
+                              and so on
+    :param imgdir: str, path of the directory in which to save images
+    :param save_imgs: if true saves image once in a while
+    :return: nothing
+    """
+    cursor = 0
+    for n_inliers in inliers_per_model:
+        x = inliers[cursor:cursor + n_inliers, 0]
+        y = inliers[cursor:cursor + n_inliers, 1]
+        cursor += n_inliers
+        plt.scatter(x, y, s=2)
+
+    x = outliers[:, 0]
+    y = outliers[:, 1]
+    plt.scatter(x, y, s=2)
     plt.grid(color="k", linestyle=":", linewidth=1)
     plt.axes().set_aspect("equal", "datalim")
     plt.gca().set_aspect("equal", adjustable="box")
 
     # save plot once in a while
     random_number = rand.randrange(10000)
-    if random_number % 20 == 0:
+    if save_imgs and random_number % 20 == 0:
         folder = imgdir + "/" + str(rand.randrange(10000)) + ".png"
-        # checkExistenceAndCreate(folder)
         plt.savefig(folder)
 
     # show it

@@ -1,7 +1,6 @@
-import string
 import os
-from typing import Type, List
-
+from typing import Type, List, Union
+import numpy as np
 from syndalib.makers.circle_maker import CircleMaker
 from syndalib.makers.conic_maker import ConicMaker
 from syndalib.makers.ellipse_maker import EllipseMaker
@@ -59,9 +58,13 @@ def generate_data(
     noise_range: List,
     ds_name: str,
     is_train: bool = True,
-    format: str = "matlab"):
+    plot: bool = False,
+    save_imgs: bool = False,
+    save_numpy: bool = True,
+    save_matlab: bool = False):
     """
-    generates .mat files in a structured fashion within the specified folder
+    generates data corrupted by outliers and returns a numpy array.
+    You can optionally save data in a .mat file in a structured fashion within the specified folder
 
     :param ns: int, total number of samples to be generated for each outlier rate
     :param npps: int, total number of points per sample
@@ -71,9 +74,11 @@ def generate_data(
     :param noise_range: list of floats, list of stddevs of the gaussian noise to be added to the inliers (ex. noise range = [0.01, 0.02, 0.03] will generate samples with gaussian noise (0,0.01), (0,0.02) and (0, 0.03).
     :param ds_name: str, format of file "matlab" is the only one supported so far. default is "matlab".
     :param is_train: bool, true to write data in train folder, false to write data in test folder. default is True.
-
-    :param format:
-    :return:
+    :param plot: bool, if true shows the generated samples
+    :param save_imgs: bool, if true saves some of the images of the generated samples
+    :param save_numpy: bool, if true saves data and labels in a pandas dataframe within the specified folder
+    :param save_matlab: bool, if true saves .mat file in structured fashion within a specified folder. default is False.
+    :return: np.ndarray
     """
 
     Maker.NUM_SAMPLES = ns
@@ -82,53 +87,22 @@ def generate_data(
     Maker.MODEL = class_type
     Maker.NOISE_PERC_RANGE = noise_range
     Maker.DEST = format
-    if is_train:
-        Maker.TRAIN_DIR = "train"
-        Maker.TEST_DIR = ""
-    else:
-        Maker.TRAIN_DIR = ""
-        Maker.TEST_DIR = "test"
-
     Maker.NUMBER_OF_MODELS = nm
+    Maker.PLOT = plot
+    Maker.SAVE_IMGS = save_imgs
+    Maker.SAVE_NUMPY = save_numpy
+    Maker.SAVE_MATLAB = save_matlab
 
-    # create basedir
-    basedir = class_type
-    if not os.path.exists(basedir):
-        os.mkdir(basedir)
+    if Maker.SAVE_NUMPY or Maker.SAVE_MATLAB:
+        # base dir
+        train_or_test_dir = "train" if is_train else "test"
+        Maker.BASE_DIR = "{}/nm_{}/{}/npps_{}/ns_{}/{}".format(class_type, nm, ds_name, npps, ns, train_or_test_dir)
+        os.makedirs(Maker.BASE_DIR, exist_ok=True)
 
-    basedir += "/nm_" + str(nm)
-    if not (os.path.exists(basedir)):
-        os.mkdir(basedir)
-
-    basedir += "/" + ds_name
-    if not os.path.exists(basedir):
-        os.mkdir(basedir)
-
-    basedir += "/npps_" + str(npps)
-    if not os.path.exists(basedir):
-        os.mkdir(basedir)
-
-    basedir += "/ns_" + str(ns)
-    if not os.path.exists(basedir):
-        os.mkdir(basedir)
-
-    Maker.BASE_DIR = basedir
-
-    # create img dirs
-    imgbasedir = Maker.BASE_DIR
-    if Maker.TRAIN_DIR != "":
-        imgbasedir += "/" + "train"
-    if Maker.TEST_DIR != "":
-        imgbasedir += "/" + "test"
-
-    if not os.path.exists(imgbasedir):
-        os.mkdir(imgbasedir)
-
-    imgbasedir += "/" + "imgs"
-    if not os.path.exists(imgbasedir):
-        os.mkdir(imgbasedir)
-
-    Maker.IMG_BASE_DIR = imgbasedir
+    if Maker.SAVE_IMGS:
+        # create img dirs
+        Maker.IMG_BASE_DIR = "{}/imgs".format(Maker.BASE_DIR)
+        os.makedirs(Maker.IMG_BASE_DIR, exist_ok=True)
 
     maker = None
     if Maker.MODEL == "circles":
@@ -139,7 +113,10 @@ def generate_data(
         maker = EllipseMaker()
     elif Maker.MODEL == "conics":
         maker = ConicMaker()
+
     if maker is not None:
-        maker.start()
+        dataset = maker.start()
     else:
-        print('Incorrect name for "model"')
+        print('Incorrect name for model"')
+
+    return dataset

@@ -3,8 +3,9 @@ setup.py
 syndalib/__init__.py
 syndalib/drawer.py
 syndalib/linalg.py
-syndalib/plot.py
+syndalib/loader.py
 syndalib/syn2d.py
+syndalib/synhomo.py
 syndalib.egg-info/PKG-INFO
 syndalib.egg-info/SOURCES.txt
 syndalib.egg-info/dependency_links.txt
@@ -18,4 +19,5 @@ syndalib/makers/line_maker.py
 syndalib/makers/maker.py
 syndalib/utils/__init__.py
 syndalib/utils/config.py
+syndalib/utils/enums.py
 syndalib/utils/utils.py

@@ -2,6 +2,9 @@ import math
 import random
 import numpy as np
 from typing import Tuple, List, Union
+import os
+import h5py
+import tensorflow as tf
 
 
 def outliers_points(x_range: Tuple[float, float],
@@ -43,7 +46,7 @@ def circle_points(radius: float,
     :param n: number of points
     :param noise: gaussian noise standard deviation
     :param homogeneous: bool, if true returns homogeneous coordinates, otherwise euclidean coordinates, default is true
-    :return: np array [(x_1,y_1,1),...,(x_np,y_np,1)]
+    :return: np.ndarray, (n, n_coords): [(x_1,y_1,1),...,(x_np,y_np,1)]
     """
     points = []
     for _ in range(n):
@@ -126,7 +129,7 @@ def corrupted_circle_points(radius: float,
     return points
 
 
-def conic_points(coefs: List,
+def conic_points(coefs: Union[List, np.ndarray],
                  x_range: Tuple[float, float] = (-10.0, 10.0),
                  y_range: Tuple[float, float] = (-10.0, 10.0),
                  resolution: Union[int, Tuple[int, int]] = 1000):
@@ -138,14 +141,6 @@ def conic_points(coefs: List,
     :param resolution: how many points to be sampled in each of the 2 dimensions, default is 1000*1000
     :return: (x,y,), pair of coordinates of conic
     """
-    a, b, c, d, e, f = coefs
-    if a == 0 and b == 0 and c == 0:
-        raise Exception("Inputted linear equation")
-
-    coefs_mat = np.array([[a, b / 2, d / 2],
-                          [b / 2, c, e / 2],
-                          [d / 2, e / 2, f]], dtype=float)
-
     if type(resolution) == int:
         nx = ny = resolution
     elif type(resolution) == Tuple:
@@ -158,6 +153,15 @@ def conic_points(coefs: List,
     X = np.linspace(*x_range, nx)
     Y = np.linspace(*y_range, ny)
     xv, yv = np.meshgrid(X, Y)
+
+    a, b, c, d, e, f = coefs
+    if a == 0 and b == 0 and c == 0:
+        raise Exception("Inputted linear equation")
+
+    coefs_mat = np.array([[a, b / 2, d / 2],
+                          [b / 2, c, e / 2],
+                          [d / 2, e / 2, f]], dtype=float)
+
     for i in range(nx):
         for j in range(nx):
             point = np.array([xv[i, j], yv[i, j], 1], dtype=float)
@@ -166,4 +170,44 @@ def conic_points(coefs: List,
                 x.append(point[0])
                 y.append(point[1])
     return x, y
+
+
+
+
+
+def homography_correspondences_from_modelnet():
+
+    filename = "modelnet40_ply_hdf5_2048/ply_data_train0.h5"
+    with h5py.File(filename, "r") as f:
+        # List all groups
+        keys = list(f.keys())
+        data_key = keys[0]
+        faceId_key = keys[1]
+        label_key = keys[2]
+        normal_key = keys[3]
+
+        # Get the data
+        data_original = list(f[data_key])
+        labels = list(f[label_key])
+
+    # save point clouds in structure
+    data = np.zeros((3, 2048, 2048))
+    for i in range(data.shape[2]):
+        data[..., i] = np.transpose(data_original[i])
+
+    # assign label to each sample
+    f = open("modelnet40_ply_hdf5_2048/shape_names.txt", "r")
+    label_names = f.readlines()
+    label_names = [name.strip() for name in label_names]
+    models_labels = []
+    for i in range(len(labels)):
+        models_labels.append(label_names[labels[i][0]])
+
+
+
+
+
+
+
+
 
